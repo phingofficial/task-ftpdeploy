@@ -1,4 +1,5 @@
 <?php
+
 /**
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
@@ -17,11 +18,17 @@
  * <http://phing.info>.
  */
 
-namespace Phing\Task\Ext;
+namespace Phing\Task\Ext\FtpDeploy;
 
+use Phing\Exception\BuildException;
+use Phing\ExceptionBuildException;
+use Phing\Io\File;
+use Phing\Io\FileSystem;
+use Phing\Phing;
 use Phing\Task;
 use Phing\Task\System\Element\LogLevelAware;
 use Phing\Type\Element\FileSetAware;
+use Phing\Util\StringHelper;
 
 /**
  * FtpDeployTask
@@ -189,7 +196,7 @@ class FtpDeployTask extends Task
      */
     public function setSkipOnSameSize($skipOnSameSize): void
     {
-        $this->skipOnSameSize = \StringHelper::booleanValue($skipOnSameSize);
+        $this->skipOnSameSize = StringHelper::booleanValue($skipOnSameSize);
     }
 
     /**
@@ -197,13 +204,13 @@ class FtpDeployTask extends Task
      */
     public function init()
     {
-        $paths = \Phing::explodeIncludePath();
+        $paths = Phing::explodeIncludePath();
         foreach ($paths as $path) {
             if (file_exists($path . DIRECTORY_SEPARATOR . 'Net' . DIRECTORY_SEPARATOR . 'FTP.php')) {
                 return true;
             }
         }
-        throw new \BuildException('The FTP Deploy task requires the Net_FTP PEAR package.');
+        throw new BuildException('The FTP Deploy task requires the Net_FTP PEAR package.');
     }
 
     /**
@@ -217,7 +224,7 @@ class FtpDeployTask extends Task
         if ($this->ssl) {
             $ret = $ftp->setSsl();
             if (@\PEAR::isError($ret)) {
-                throw new \BuildException(
+                throw new BuildException(
                     'SSL connection not supported by php: ' . $ret->getMessage()
                 );
             }
@@ -226,7 +233,7 @@ class FtpDeployTask extends Task
         }
         $ret = $ftp->connect();
         if (@\PEAR::isError($ret)) {
-            throw new \BuildException(
+            throw new BuildException(
                 'Could not connect to FTP server ' . $this->host . ' on port ' . $this->port . ': ' . $ret->getMessage()
             );
         }
@@ -235,7 +242,7 @@ class FtpDeployTask extends Task
 
         $ret = $ftp->login($this->username, $this->password);
         if (@\PEAR::isError($ret)) {
-            throw new \BuildException(
+            throw new BuildException(
                 'Could not login to FTP server ' . $this->host . ' on port ' . $this->port . ' with username ' . $this->username . ': ' . $ret->getMessage()
             );
         }
@@ -247,7 +254,7 @@ class FtpDeployTask extends Task
             $ret = $ftp->setPassive();
             if (@\PEAR::isError($ret)) {
                 $ftp->disconnect();
-                throw new \BuildException('Could not set PASSIVE mode: ' . $ret->getMessage());
+                throw new BuildException('Could not set PASSIVE mode: ' . $ret->getMessage());
             }
         }
 
@@ -264,18 +271,18 @@ class FtpDeployTask extends Task
         $ret = $ftp->mkdir($dir, true);
         if (@\PEAR::isError($ret)) {
             $ftp->disconnect();
-            throw new \BuildException('Could not create directory ' . $dir . ': ' . $ret->getMessage());
+            throw new BuildException('Could not create directory ' . $dir . ': ' . $ret->getMessage());
         }
 
         $ret = $ftp->cd($dir);
         if (@\PEAR::isError($ret)) {
             $ftp->disconnect();
-            throw new \BuildException('Could not change to directory ' . $dir . ': ' . $ret->getMessage());
+            throw new BuildException('Could not change to directory ' . $dir . ': ' . $ret->getMessage());
         }
 
         $this->log('Changed directory ' . $dir, $this->logLevel);
 
-        $fs = \FileSystem::getFileSystem();
+        $fs = FileSystem::getFileSystem();
         $convert = $fs->getSeparator() === '\\';
 
         foreach ($this->filesets as $fs) {
@@ -293,12 +300,12 @@ class FtpDeployTask extends Task
                 }
 
                 // Read directory informations, if file exists, else create the directory
-                if (!$this->_directoryInformations($ftp, $remoteFileInformations, $dirname)) {
+                if (!$this->directoryInformations($ftp, $remoteFileInformations, $dirname)) {
                     $this->log('Will create directory ' . $dirname, $this->logLevel);
                     $ret = $ftp->mkdir($dirname, true);
                     if (@\PEAR::isError($ret)) {
                         $ftp->disconnect();
-                        throw new \BuildException('Could not create directory ' . $dirname . ': ' . $ret->getMessage());
+                        throw new BuildException('Could not create directory ' . $dirname . ': ' . $ret->getMessage());
                     }
                 }
                 if ($this->dirmode) {
@@ -313,7 +320,7 @@ class FtpDeployTask extends Task
             }
 
             foreach ($srcFiles as $filename) {
-                $file = new \PhingFile($fromDir->getAbsolutePath(), $filename);
+                $file = new File($fromDir->getAbsolutePath(), $filename);
                 if ($convert) {
                     $filename = str_replace('\\', '/', $filename);
                 }
@@ -331,7 +338,7 @@ class FtpDeployTask extends Task
                     $ret = $ftp->put($file->getCanonicalPath(), $filename, true, $this->mode);
                     if (@\PEAR::isError($ret)) {
                         $ftp->disconnect();
-                        throw new \BuildException('Could not deploy file ' . $filename . ': ' . $ret->getMessage());
+                        throw new BuildException('Could not deploy file ' . $filename . ': ' . $ret->getMessage());
                     }
                 }
                 if ($this->filemode) {
@@ -356,7 +363,7 @@ class FtpDeployTask extends Task
      * @param $directory
      * @return bool
      */
-    private function _directoryInformations(\Net_FTP $ftp, &$remoteFileInformations, $directory)
+    private function directoryInformations(\Net_FTP $ftp, &$remoteFileInformations, $directory)
     {
         $content = $ftp->ls($directory);
         if (@\PEAR::isError($content)) {
